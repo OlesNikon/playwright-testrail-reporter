@@ -1,5 +1,5 @@
 {
-  "name": "playwright-testrail-reporter",
+  "name": "playwright-reporter-testrail",
   "version": "1.0.0",
   "description": "Playwright reporter for TestRail with multi project support",
   "homepage": "https://github.com/IgorLizenko/playwright-testrail-reporter#readme",
