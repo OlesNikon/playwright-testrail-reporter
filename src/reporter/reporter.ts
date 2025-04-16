@@ -66,10 +66,6 @@ class TestRailReporter implements Reporter {
             return;
         }
 
-        if (result.status !== 'passed' && result.status !== 'failed') {
-            return;
-        }
-
         // Wait for all runs to be created
         const runs = await Promise.all(this.arrayTestRunPromises);
         const arrayTestRuns = runs.filter((run) => run !== null).map((validRun) => {
@@ -80,6 +76,14 @@ class TestRailReporter implements Reporter {
                 runId: validRun.id
             };
         });
+
+        if (result.status !== 'passed' && result.status !== 'failed') {
+            logger.warn('Test run was either interrupted or timed out, closing test runs');
+            await Promise.all(arrayTestRuns.map((run) => this.testRailClient.closeTestRun(run.runId)));
+            logger.warn('All created test runs have been closed ✅');
+
+            return;
+        }
 
         const finalResults = groupTestResults(this.arrayTestResults, arrayTestRuns).map((finalResult) => {
             return filterDuplicatingCases(finalResult);
@@ -92,12 +96,11 @@ class TestRailReporter implements Reporter {
             return;
         }
 
-        for (const finalResult of finalResults) {
-            logger.info(`Adding results to run ${finalResult.runId}...`);
-            await this.testRailClient.addTestRunResults(finalResult.runId, finalResult.arrayCaseResults);
-        }
+        const runIds = finalResults.map((finalResult) => finalResult.runId);
+        logger.info(`Adding results to runs ${runIds.join(', ')}`);
+        await Promise.all(finalResults.map((finalResult) => this.testRailClient.addTestRunResults(finalResult.runId, finalResult.arrayCaseResults)));
 
-        logger.info('All test runs have been updated 🥳');
+        logger.info('All test runs have been updated ✅');
     }
 
     printsToStdio(): boolean {

@@ -122,6 +122,22 @@ class TestRail {
                 return null;
             });
     }
+
+    /**
+     * Closes an existing test run in TestRail.
+     * @param runId ID of the test run to close
+     * @returns Promise that resolves when the run is closed
+     */
+    async closeTestRun(runId: TestRailRun['id']): Promise<void> {
+        await this.client.post(`/api/v2/close_run/${runId}`)
+            .then(() => {
+                logger.debug(`Run ${runId} closed`);
+            })
+            .catch((error: unknown) => {
+                const errorPayload = (error as AxiosError).response?.data ?? error;
+                logger.error(`Failed to close test run for run ID ${runId}`, errorPayload);
+            });
+    }
 }
 
 export { TestRail };
