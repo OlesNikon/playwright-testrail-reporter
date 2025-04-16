@@ -1,4 +1,4 @@
-# playwright-testrail-reporter
+# Playwright TestRail Reporter with multi project support
 
 A Playwright reporter that integrates with TestRail, supporting multiple projects and test suites. This reporter automatically creates test runs and updates test results in TestRail based on your Playwright test execution.
 
@@ -13,7 +13,7 @@ A Playwright reporter that integrates with TestRail, supporting multiple project
 ## Installation
 
 ```bash
-npm install --save-dev playwright-testrail-reporter
+npm install --save-dev playwright-reporter-testrail
 ```
 
 ## Configuration
@@ -32,7 +32,7 @@ import { PlaywrightTestConfig } from '@playwright/test';
 
 const config: PlaywrightTestConfig = {
   reporter: [
-    ['playwright-testrail-reporter', {
+    ['playwright-reporter-testrail', {
       domain: 'https://yourdomain.testrail.io',
       username: 'your-username',
       password: 'your-password'
