@@ -5,7 +5,7 @@ import axios, { AxiosError, AxiosInstance } from 'axios';
 import axiosRetry from 'axios-retry';
 
 import { ReporterOptions } from '@types-internal/playwright-reporter.types';
-import { TestRailCase, TestRailCaseStatus, TestRailProject, TestRailRun, TestRailRunWithAdditionalData, TestRailSuite } from '@types-internal/testrail-api.types';
+import { TestRailCase, TestRailCaseStatus, TestRailProject, TestRailRun, TestRailSuite } from '@types-internal/testrail-api.types';
 
 import logger from '@logger';
 
@@ -65,26 +65,24 @@ class TestRail {
         projectId,
         suiteId,
         name,
-        cases
+        cases,
+        includeAllCases
     }: {
         projectId: TestRailProject['id'],
         suiteId: TestRailSuite['id'],
         name: TestRailRun['name'],
-        cases: TestRailCase['id'][]
-    }): Promise<TestRailRunWithAdditionalData | null> {
+        cases: TestRailCase['id'][],
+        includeAllCases: boolean
+    }): Promise<TestRailRun | null> {
         return this.client.post(`/api/v2/add_run/${projectId}`, {
             suite_id: suiteId,
             name,
-            case_ids: cases
+            case_ids: cases,
+            include_all: includeAllCases
         }).then((response: { data: TestRailRun }) => {
             logger.debug(`Run created with ID: ${response.data.id}`);
 
-            return {
-                ...response.data,
-                projectId,
-                suiteId,
-                cases
-            };
+            return response.data;
         }).catch((error: unknown) => {
             const errorPayload = (error as AxiosError).response?.data ?? error;
 

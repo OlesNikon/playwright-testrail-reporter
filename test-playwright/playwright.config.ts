@@ -19,7 +19,9 @@ export default defineConfig({
         ['../src/index.ts', {
             domain: process.env.TESTRAIL_URL,
             username: process.env.TESTRAIL_USERNAME,
-            password: process.env.TESTRAIL_PASSWORD
+            password: process.env.TESTRAIL_PASSWORD,
+            includeAllCases: false,
+            closeRuns: true
         }]
     ],
     use: {
