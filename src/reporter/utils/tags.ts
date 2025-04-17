@@ -29,12 +29,12 @@ export function parseSingleTag(tag: TestCase['tags'][number]): ParsedTag | undef
 }
 
 /**
- * Parses an array of TestRail tags and groups them by project and suite
+ * Parses an array of TestRail tags and groups them by project and suite. Handles duplicate case IDs by including them only once.
  * @param tags - An array of tag strings from Playwright test case tags
- * @returns An array of ProjectSuiteCombo objects, each containing projectId, suiteId, and an array of caseIds
+ * @returns An array of ProjectSuiteCombo objects, each containing projectId, suiteId, and an array of unique caseIds
  *          if at least one tag matches the expected format, undefined otherwise
  */
-export function parseTestTags(tags: TestCase['tags']): ProjectSuiteCombo[] | undefined {
+export function parseSingleTestTags(tags: TestCase['tags']): ProjectSuiteCombo[] | undefined {
     const arrayParsedValidTags = tags.map((tag) => parseSingleTag(tag)).filter((parsedTag) => parsedTag !== undefined);
 
     if (arrayParsedValidTags.length === 0) {
@@ -48,7 +48,10 @@ export function parseTestTags(tags: TestCase['tags']): ProjectSuiteCombo[] | und
         const existingGroup = groupedResults.get(key);
 
         if (existingGroup) {
-            existingGroup.arrayCaseIds.push(parsedTag.caseId);
+            // Handle case when a single Playwright test have repetitions of the same tag with TestRail case ID
+            if (!existingGroup.arrayCaseIds.includes(parsedTag.caseId)) {
+                existingGroup.arrayCaseIds.push(parsedTag.caseId);
+            }
         } else {
             groupedResults.set(key, {
                 projectId: parsedTag.projectId,

@@ -1,6 +1,6 @@
 {
   "name": "playwright-reporter-testrail",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "description": "Playwright reporter for TestRail with multi project support",
   "homepage": "https://github.com/IgorLizenko/playwright-testrail-reporter#readme",
   "bugs": {
@@ -17,7 +17,7 @@
   "types": "lib/index.d.ts",
   "scripts": {
     "build": "rm -rf ./lib && tsc -p tsconfig.build.json && tsc-alias -p tsconfig.build.json",
-    "test": "JEST_TEST=true npx jest",
+    "test": "npx jest",
     "playwright-all": "DEBUG_MODE=true npx playwright test -c test-playwright/playwright.config.ts",
     "playwright-no-tags": "DEBUG_MODE=true npx playwright test -c test-playwright/playwright.config.ts test-playwright/tests/invalid.tags.spec.ts",
     "playwright-basic": "DEBUG_MODE=true npx playwright test -c test-playwright/playwright.config.ts test-playwright/tests/basic.tags.spec.ts",
@@ -29,7 +29,6 @@
     "axios": "^1.8.4",
     "axios-retry": "^4.5.0",
     "chalk": "^4.1.2",
-    "dotenv": "^16.5.0",
     "winston": "^3.17.0"
   },
   "devDependencies": {
@@ -40,6 +39,7 @@
     "@types/node": "^22.14.1",
     "@typescript-eslint/eslint-plugin": "^8.29.1",
     "@typescript-eslint/parser": "^8.29.1",
+    "dotenv": "^16.5.0",
     "eslint": "^9.24.0",
     "eslint-import-resolver-typescript": "^4.3.2",
     "eslint-plugin-import": "^2.31.0",

@@ -1,6 +1,8 @@
+import { stripVTControlCharacters } from 'util';
+
 import type { TestCase, TestResult } from '@playwright/test/reporter';
 
-import { parseTestTags } from '@reporter/utils/tags';
+import { parseSingleTestTags } from '@reporter/utils/tags';
 
 import { TestRailCaseResult, TestRailCaseStatus } from '@types-internal/testrail-api.types';
 
@@ -37,10 +39,10 @@ export function convertTestStatus(status: TestResult['status']): TestRailCaseSta
  * - timedOut: "Test timed out in {duration}ms"
  * - interrupted: "Test interrupted"
  * - skipped: "Test skipped"
- * - unknown: "Test status unknown"
+ * - unknown: "Test finished with unknown status"
  */
 export function generateTestComment(testCase: TestCase, testResult: TestResult): string {
-    const errorMessage = testResult.errors[0]?.message ?? 'Unknown error';
+    const errorMessage = stripVTControlCharacters(testResult.errors[0]?.message ?? 'Unknown error');
 
     switch (testResult.status) {
         case 'passed':
@@ -54,7 +56,7 @@ export function generateTestComment(testCase: TestCase, testResult: TestResult):
         case 'skipped':
             return `${testCase.title} skipped`;
         default:
-            return `${testCase.title} status unknown`;
+            return `${testCase.title} finished with unknown status`;
     }
 }
 
@@ -76,7 +78,7 @@ export function convertTestResult({
     testCase: TestCase,
     testResult: TestResult
 }): TestRailCaseResult[] {
-    const parsedTags = parseTestTags(testCase.tags);
+    const parsedTags = parseSingleTestTags(testCase.tags);
 
     if (parsedTags) {
         return parsedTags.map((tag) => (
