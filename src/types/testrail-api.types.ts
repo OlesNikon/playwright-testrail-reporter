@@ -1,28 +1,45 @@
 /* eslint-disable @typescript-eslint/naming-convention */
 
-// Stub for TestRail API types
-export type TestRailProject = {
+/*
+    Base types that are used both in requests and responses
+*/
+export type TestRailBaseProject = {
     id: number
 };
 
-// Stub for TestRail API types
-export type TestRailSuite = {
+export type TestRailBaseSuite = {
     id: number
 };
 
-// Stub for TestRail API types
-export type TestRailCase = {
+export type TestRailBaseCase = {
     id: number
 };
 
-// Response from TestRail API when creating/updating a run
-export type TestRailRun = {
+export type TestRailBaseRun = {
     id: number,
-    suite_id: TestRailSuite['id'],
     name: string,
-    description: string | null,
+    description: string | null
+};
+
+export type TestRailBaseResult = {
+    id: number
+};
+
+export type TestRailBaseUser = {
+    id: number
+};
+
+export type TestRailBaseAttachment = {
+    id: number
+};
+
+/*
+    Response types
+*/
+export type TestRailResponseRunCreated = TestRailBaseRun & {
+    suite_id: TestRailBaseSuite['id'],
     milestone_id: number | null,
-    assignedto_id: number | null,
+    assignedto_id: TestRailBaseUser['id'] | null,
     include_all: boolean,
     is_completed: boolean,
     completed_on: number | null,
@@ -33,35 +50,62 @@ export type TestRailRun = {
     untested_count: number,
     retest_count: number,
     failed_count: number,
-    custom_status1_count: number,
-    custom_status2_count: number,
-    custom_status3_count: number,
-    custom_status4_count: number,
-    custom_status5_count: number,
-    custom_status6_count: number,
-    custom_status7_count: number,
-    project_id: number,
+    project_id: TestRailBaseProject['id'],
     plan_id: number | null,
     created_on: number,
     updated_on: number,
     refs: string | null,
-    created_by: number,
+    created_by: TestRailBaseUser['id'],
     url: string
 };
 
-// Payload required for updating test runs
-export type TestRailCaseResult = {
-    case_id: TestRailCase['id'],
+export type TestRailResponseRunUpdated = TestRailBaseResult & {
+    test_id: number,
+    status_id: TestRailCaseStatus,
+    created_on: number,
+    assignedto_id: TestRailBaseUser['id'] | null,
+    comment: string,
+    version: null,
+    elapsed: string,
+    defects: null,
+    created_by: TestRailBaseUser['id'],
+    attachment_ids: TestRailBaseAttachment['id'][]
+};
+
+export type TestRailResponseAttachmentAdded = {
+    attachment_id: TestRailBaseAttachment['id']
+};
+
+/*
+    Request payload types
+*/
+export type TestRailPayloadCreateRun = {
+    projectId: TestRailBaseProject['id'],
+    suiteId: TestRailBaseSuite['id'],
+    name: TestRailBaseRun['name'],
+    description?: string,
+    cases: TestRailBaseCase['id'][],
+    includeAllCases?: boolean
+};
+
+export type TestRailPayloadUpdateRunResult = {
+    case_id: TestRailBaseCase['id'],
     status_id: TestRailCaseStatus,
     comment: string,
     elapsed?: string
 };
 
+export type TestRailPayloadAddAttachment = {
+    resultId: TestRailBaseResult['id'],
+    attachment: string
+};
+
+// Enums
 export enum TestRailCaseStatus {
     passed = 1,
     blocked = 2,
     untested = 3,
-    // retest is not used in this reporter
+    // retest status exists in API but is not used in reporter
     // retest = 4,
     failed = 5
 }

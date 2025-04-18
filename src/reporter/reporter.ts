@@ -4,13 +4,13 @@ import type {
 
 import { TestRail } from '@testrail-api/testrail-api';
 
-import { filterDuplicatingCases, groupTestResults } from '@reporter/utils/group-runs';
+import { filterDuplicatingCases, groupAttachments, groupTestResults } from '@reporter/utils/group-runs';
 import { parseSingleTestTags } from '@reporter/utils/tags';
-import { convertTestResult } from '@reporter/utils/test-results';
+import { convertTestResult, extractAttachmentData } from '@reporter/utils/test-results';
 import { validateSettings } from '@reporter/utils/validate-settings';
 
-import type { FinalResult, ProjectSuiteCombo, ReporterOptions, RunCreated } from '@types-internal/playwright-reporter.types';
-import type { TestRailCaseResult } from '@types-internal/testrail-api.types';
+import type { AttachmentData, CaseResultMatch, FinalResult, ProjectSuiteCombo, ReporterOptions, RunCreated } from '@types-internal/playwright-reporter.types';
+import type { TestRailPayloadUpdateRunResult } from '@types-internal/testrail-api.types';
 
 import logger from '@logger';
 
@@ -19,11 +19,13 @@ class TestRailReporter implements Reporter {
 
     private readonly isSetupCorrectly: boolean = false;
 
-    private arrayTestRuns: ProjectSuiteCombo[] | undefined;
-    private readonly arrayTestResults: TestRailCaseResult[];
+    private arrayTestRuns: ProjectSuiteCombo[] | null;
+    private readonly arrayTestResults: TestRailPayloadUpdateRunResult[];
+    private readonly arrayAttachments: AttachmentData[];
 
-    private readonly closeRuns: boolean;
     private readonly includeAllCases: boolean;
+    private readonly includeAttachments: boolean;
+    private readonly closeRuns: boolean;
 
     constructor(options: ReporterOptions) {
         this.isSetupCorrectly = validateSettings(options);
@@ -31,9 +33,18 @@ class TestRailReporter implements Reporter {
         this.testRailClient = new TestRail(options);
 
         this.arrayTestResults = [];
+        this.arrayAttachments = [];
+        this.arrayTestRuns = null;
 
-        this.closeRuns = options.closeRuns ?? false;
         this.includeAllCases = options.includeAllCases ?? false;
+        this.includeAttachments = options.includeAttachments ?? false;
+        this.closeRuns = options.closeRuns ?? false;
+
+        logger.debug('Reporter options', {
+            includeAllCases: this.includeAllCases,
+            includeAttachments: this.includeAttachments,
+            closeRuns: this.closeRuns
+        });
     }
 
     onBegin?(_config: FullConfig, suite: Suite): void {
@@ -48,6 +59,7 @@ class TestRailReporter implements Reporter {
     onTestEnd(testCase: TestCase, testResult: TestResult): void {
         logger.debug(`Test "${testCase.title}" finished with ${testResult.status} status`);
         this.arrayTestResults.push(...convertTestResult({ testCase, testResult }));
+        this.arrayAttachments.push(...extractAttachmentData({ testCase, testResult }));
     }
 
     async onEnd(result: FullResult): Promise<void> {
@@ -66,15 +78,19 @@ class TestRailReporter implements Reporter {
             return;
         }
 
-        await this.addResultsToRuns(finalResults);
+        const arrayRunsUpdated = await this.addResultsToRuns(finalResults);
+
+        if (this.includeAttachments) {
+            await this.addAttachments(this.arrayAttachments, arrayRunsUpdated);
+        }
 
         if (this.closeRuns) {
             await this.closeTestRuns(finalResults.map((finalResult) => finalResult.runId));
         }
 
         const finalMessage = this.closeRuns
-            ? 'All test runs have been updated and closed ✅'
-            : 'All test runs have been updated ✅';
+            ? 'All test runs have been updated and closed '
+            : 'All test runs have been updated ';
 
         logger.info(finalMessage);
     }
@@ -85,9 +101,13 @@ class TestRailReporter implements Reporter {
             return false;
         }
 
-        if (result.status !== 'passed' && result.status !== 'failed') {
-            logger.warn('Test run was either interrupted or timed out, no test runs will be created');
+        if (result.status === 'interrupted') {
+            logger.warn('Test run was interrupted, no test runs will be created');
+            return false;
+        }
 
+        if (result.status === 'timedout') {
+            logger.warn('Test run was timed out, no test runs will be created');
             return false;
         }
 
@@ -103,11 +123,8 @@ class TestRailReporter implements Reporter {
     private async createTestRuns(arrayTestRuns: ProjectSuiteCombo[]): Promise<RunCreated[]> {
         logger.debug('Runs to create', arrayTestRuns);
 
-        const arrayTestRunsCreated = [];
-
-        for (const projectSuiteCombo of arrayTestRuns) {
+        const results = await Promise.all(arrayTestRuns.map(async (projectSuiteCombo) => {
             logger.info(`Creating a test run for project ${projectSuiteCombo.projectId} and suite ${projectSuiteCombo.suiteId}...`);
-
             const name = `Playwright Run ${new Date().toUTCString()}`;
             const response = await this.testRailClient.addTestRun({
                 projectId: projectSuiteCombo.projectId,
@@ -117,28 +134,71 @@ class TestRailReporter implements Reporter {
                 includeAllCases: this.includeAllCases
             });
 
-            if (response !== null) {
-                arrayTestRunsCreated.push({
-                    runId: response.id,
-                    ...projectSuiteCombo
-                });
+            if (response === null) {
+                return null;
             }
-        }
+
+            return {
+                runId: response.id,
+                ...projectSuiteCombo
+            };
+        }));
+
+        const arrayTestRunsCreated = results.filter((result) => result !== null);
 
         logger.debug('Runs created', arrayTestRunsCreated);
 
         return arrayTestRunsCreated;
     }
 
-    private compileFinalResults(arrayTestResults: TestRailCaseResult[], arrayTestRuns: RunCreated[]): FinalResult[] {
+    private compileFinalResults(arrayTestResults: TestRailPayloadUpdateRunResult[], arrayTestRuns: RunCreated[]): FinalResult[] {
         return groupTestResults(arrayTestResults, arrayTestRuns).map((finalResult) => {
             return filterDuplicatingCases(finalResult);
         });
     }
 
-    private async addResultsToRuns(arrayTestRuns: FinalResult[]): Promise<void> {
+    private async addResultsToRuns(arrayTestRuns: FinalResult[]): Promise<CaseResultMatch[]> {
         logger.info(`Adding results to runs ${arrayTestRuns.map((run) => run.runId).join(', ')}`);
-        await Promise.all(arrayTestRuns.map((run) => this.testRailClient.addTestRunResults(run.runId, run.arrayCaseResults)));
+        const results = await Promise.all(arrayTestRuns.map(async (run) => {
+            const result = await this.testRailClient.addTestRunResults(run.runId, run.arrayCaseResults);
+
+            if (result === null) {
+                return null;
+            }
+
+            if (result.length !== run.arrayCaseResults.length) {
+                logger.error('Number of results does not match number of cases');
+                return null;
+            }
+
+            // Match request payload to response by index
+            const arrayMatchedCasesToResults = run.arrayCaseResults.map((caseResult, index) => {
+                return {
+                    caseId: caseResult.case_id,
+                    resultId: result[index].id
+                };
+            });
+
+            return arrayMatchedCasesToResults;
+        }));
+
+        return results.flat().filter((result) => result !== null);
+    }
+
+    private async addAttachments(arrayAttachments: AttachmentData[], arrayRunsUpdated: CaseResultMatch[]): Promise<void> {
+        const arrayAttachmentPayloads = groupAttachments(arrayAttachments, arrayRunsUpdated);
+
+        if (arrayAttachmentPayloads.length === 0) {
+            logger.info('No attachments to add');
+
+            return;
+        }
+
+        logger.info(`Adding attachments to results ${arrayAttachmentPayloads.map((payload) => payload.resultId).join(', ')}`);
+
+        await Promise.all(arrayAttachmentPayloads.map(async (payload) => {
+            await this.testRailClient.addAttachmentToResult(payload);
+        }));
     }
 
     private async closeTestRuns(arrayRunIds: number[]): Promise<void> {

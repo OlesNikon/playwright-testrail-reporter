@@ -1,30 +1,41 @@
-import type { TestRailCase, TestRailCaseResult, TestRailProject, TestRailRun, TestRailSuite } from '@types-internal/testrail-api.types';
+import type { TestRailBaseCase, TestRailBaseProject, TestRailBaseResult, TestRailBaseRun, TestRailBaseSuite, TestRailPayloadUpdateRunResult } from '@types-internal/testrail-api.types';
 
 export type ReporterOptions = {
     domain: string,
     username: string,
     password: string,
-    closeRuns?: boolean,
-    includeAllCases?: boolean
+    includeAllCases?: boolean,
+    includeAttachments?: boolean,
+    closeRuns?: boolean
 };
 
 export type ParsedTag = {
-    projectId: TestRailProject['id'],
-    suiteId: TestRailSuite['id'],
-    caseId: TestRailCase['id']
+    projectId: TestRailBaseProject['id'],
+    suiteId: TestRailBaseSuite['id'],
+    caseId: TestRailBaseCase['id']
 };
 
 export type ProjectSuiteCombo = {
-    projectId: TestRailProject['id'],
-    suiteId: TestRailSuite['id'],
-    arrayCaseIds: TestRailCase['id'][]
+    projectId: TestRailBaseProject['id'],
+    suiteId: TestRailBaseSuite['id'],
+    arrayCaseIds: TestRailBaseCase['id'][]
 };
 
 export type RunCreated = ProjectSuiteCombo & {
-    runId: TestRailRun['id']
+    runId: TestRailBaseRun['id']
+};
+
+export type AttachmentData = {
+    caseId: TestRailBaseCase['id'],
+    arrayFiles: string[]
+};
+
+export type CaseResultMatch = {
+    caseId: TestRailBaseCase['id'],
+    resultId: TestRailBaseResult['id']
 };
 
 export type FinalResult = {
-    runId: TestRailRun['id'],
-    arrayCaseResults: TestRailCaseResult[]
+    runId: TestRailBaseRun['id'],
+    arrayCaseResults: TestRailPayloadUpdateRunResult[]
 };

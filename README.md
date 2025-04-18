@@ -11,8 +11,8 @@ A Playwright reporter that integrates with TestRail via API and supports multipl
 - 🔄 Multi-project and multi-suite support
 - 🏷️ Test case mapping via tags (e.g., `@101-204-3453`)
 - 📊 Automatic test run creation
-- 📝 Automatic test run closing when test run is interrupted or timed out
-- 🔍 Comprehensive error reporting
+- 📝 On demand run closing
+- 🔍 Comprehensive error reporting (includes attachments on demand)
 
 ## Setup
 
@@ -41,6 +41,7 @@ const config: PlaywrightTestConfig = {
       username: 'your-email',
       password: 'your-password',
       includeAllCases: false,
+      includeAttachments: false,
       closeRuns: false
     }]
   ]
@@ -55,7 +56,10 @@ export default config;
 - `username`: TestRail email
 - `password`: TestRail password or API key
 - `includeAllCases`: Optional, default `false`, whether to include all cases of the suite to the test run
-- `closeRuns`: Optional, default `false`, whether to close test runs in the end
+- `includeAttachments`**![Beta](https://img.shields.io/badge/status-beta-red)**: Optional, default `false`, whether to include attachments in the test run.  
+**Important**: may result in longer execution time
+- `closeRuns`: Optional, default `false`, whether to close test runs in the end.  
+**Important**: ensure that user has permissions to close runs in TestRail.
 
 ## Usage
 
@@ -94,6 +98,10 @@ npx playwright test
 
 Your test results will be automatically sent to TestRail.
 
+### Logging
+
+If you want to have more detailed logs, consider setting `TESTRAIL_REPORTER_DEBUG_MODE` environment variable to `true`.
+
 ## Additional information
 
 ### Creating and Updating Test Runs
@@ -110,6 +118,10 @@ If you have multiple Playwright tests that match the same TestRail case, the rep
 
 1. If all Playwright tests finish with the same status, the TestRail case will be marked with that status, and the comment (and error in case of fail) will be generated from the first test that finished.
 2. If any Playwright tests finish with different statuses, the reporter will prioritize the following statuses in order: passed, failed, blocked, untested.
+
+### Know Issues
+
+When several Playwright tests match the same TestRail case, each test will upload its attachments to the TestRail case. This may result in duplicate attachments.
 
 ## Contributing
 

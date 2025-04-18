@@ -2,9 +2,10 @@ import { stripVTControlCharacters } from 'util';
 
 import type { TestCase, TestResult } from '@playwright/test/reporter';
 
-import { parseSingleTestTags } from '@reporter/utils/tags';
+import { parseSingleTag, parseSingleTestTags } from '@reporter/utils/tags';
 
-import { TestRailCaseResult, TestRailCaseStatus } from '@types-internal/testrail-api.types';
+import type { AttachmentData } from '@types-internal/playwright-reporter.types';
+import { TestRailCaseStatus, TestRailPayloadUpdateRunResult } from '@types-internal/testrail-api.types';
 
 function formatMilliseconds(ms: number): string {
     const seconds = Math.ceil(ms / 1000);
@@ -92,7 +93,7 @@ export function convertTestResult({
 }: {
     testCase: TestCase,
     testResult: TestResult
-}): TestRailCaseResult[] {
+}): TestRailPayloadUpdateRunResult[] {
     const parsedTags = parseSingleTestTags(testCase.tags);
 
     if (parsedTags) {
@@ -106,4 +107,39 @@ export function convertTestResult({
     }
 
     return [];
+}
+
+/**
+ * Extracts attachment data from test results based on TestRail case IDs found in test tags.
+ * @param {Object} params - The parameters object
+ * @param {TestCase} params.testCase - The test case containing tags with TestRail case IDs
+ * @param {TestResult} params.testResult - The test result containing attachments
+ * @returns {AttachmentData[]} Array of attachment data objects, each containing a TestRail case ID and array of file paths.
+ * Returns empty array if no attachments present or no valid TestRail case IDs found in tags.
+ */
+export function extractAttachmentData({
+    testCase,
+    testResult
+}: {
+    testCase: TestCase,
+    testResult: TestResult
+}): AttachmentData[] {
+    if (testResult.attachments.length === 0) {
+        return [];
+    }
+
+    const arrayParsedValidTags = testCase.tags.map((tag) => parseSingleTag(tag)).filter((parsedTag) => parsedTag !== null);
+
+    if (arrayParsedValidTags.length === 0) {
+        return [];
+    }
+
+    return arrayParsedValidTags.map((tag) => {
+        return {
+            caseId: tag.caseId,
+            arrayFiles: testResult.attachments
+                .filter((attachment) => attachment.path)
+                .map((attachment) => attachment.path!)
+        };
+    }).flat();
 }
