@@ -2,7 +2,7 @@ import { stripVTControlCharacters } from 'util';
 
 import type { TestCase, TestResult } from '@playwright/test/reporter';
 
-import { parseSingleTag, parseSingleTestTags } from '@reporter/utils/tags';
+import { parseArrayOfTags, parseSingleTag } from '@reporter/utils/tags';
 
 import type { AttachmentData } from '@types-internal/playwright-reporter.types';
 import { TestRailCaseStatus, TestRailPayloadUpdateRunResult } from '@types-internal/testrail-api.types';
@@ -29,7 +29,7 @@ function formatMilliseconds(ms: number): string {
  * - skipped -> TestRailCaseStatus.blocked
  * - others -> TestRailCaseStatus.untested
  */
-export function convertTestStatus(status: TestResult['status']): TestRailCaseStatus {
+function convertTestStatus(status: TestResult['status']): TestRailCaseStatus {
     switch (status) {
         case 'passed':
             return TestRailCaseStatus.passed;
@@ -44,6 +44,20 @@ export function convertTestStatus(status: TestResult['status']): TestRailCaseSta
     }
 }
 
+function formatErrorMessage(arrayErrors: TestResult['errors']): string {
+    if (arrayErrors.length === 0) {
+        return 'Unknown error';
+    }
+
+    if (arrayErrors.length === 1) {
+        return stripVTControlCharacters(arrayErrors[0].message ?? 'Unknown error');
+    }
+
+    return arrayErrors.map((error, index) => {
+        return `Error #${index + 1}: ${stripVTControlCharacters(error.message ?? 'Unknown error')}`;
+    }).join('\n');
+}
+
 /**
  * Generates a comment string based on the Playwright test result.
  * @param testResult The Playwright test result object.
@@ -55,16 +69,14 @@ export function convertTestStatus(status: TestResult['status']): TestRailCaseSta
  * - skipped: "Test skipped"
  * - unknown: "Test finished with unknown status"
  */
-export function generateTestComment(testCase: TestCase, testResult: TestResult): string {
-    const errorMessage = stripVTControlCharacters(testResult.errors[0]?.message ?? 'Unknown error');
-
+function generateTestComment(testCase: TestCase, testResult: TestResult): string {
     const durationString = formatMilliseconds(testResult.duration);
 
     switch (testResult.status) {
         case 'passed':
             return `${testCase.title} passed in ${durationString}`;
         case 'failed':
-            return `${testCase.title} failed: ${errorMessage}`;
+            return `${testCase.title} failed:\n${formatErrorMessage(testResult.errors)}`;
         case 'timedOut':
             return `${testCase.title} timed out in ${durationString}`;
         case 'interrupted':
@@ -87,21 +99,22 @@ export function generateTestComment(testCase: TestCase, testResult: TestResult):
  * - comment: Generated comment about test execution
  * Returns empty array if no TestRail case IDs found in tags
  */
-export function convertTestResult({
+function convertTestResult({
     testCase,
     testResult
 }: {
     testCase: TestCase,
     testResult: TestResult
 }): TestRailPayloadUpdateRunResult[] {
-    const parsedTags = parseSingleTestTags(testCase.tags);
+    const parsedTags = parseArrayOfTags(testCase.tags);
 
     if (parsedTags) {
         return parsedTags.map((tag) => (
             tag.arrayCaseIds.map((caseId) => ({
                 case_id: caseId,
                 status_id: convertTestStatus(testResult.status),
-                comment: generateTestComment(testCase, testResult)
+                comment: generateTestComment(testCase, testResult),
+                elapsed: formatMilliseconds(testResult.duration)
             }))
         )).flat();
     }
@@ -117,7 +130,7 @@ export function convertTestResult({
  * @returns {AttachmentData[]} Array of attachment data objects, each containing a TestRail case ID and array of file paths.
  * Returns empty array if no attachments present or no valid TestRail case IDs found in tags.
  */
-export function extractAttachmentData({
+function extractAttachmentData({
     testCase,
     testResult
 }: {
@@ -128,7 +141,9 @@ export function extractAttachmentData({
         return [];
     }
 
-    const arrayParsedValidTags = testCase.tags.map((tag) => parseSingleTag(tag)).filter((parsedTag) => parsedTag !== null);
+    const arrayParsedValidTags = testCase.tags
+        .map((tag) => parseSingleTag(tag))
+        .filter((parsedTag) => parsedTag !== null);
 
     if (arrayParsedValidTags.length === 0) {
         return [];
@@ -143,3 +158,5 @@ export function extractAttachmentData({
         };
     }).flat();
 }
+
+export { convertTestStatus, generateTestComment, convertTestResult, extractAttachmentData };
