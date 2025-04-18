@@ -4,6 +4,7 @@ import type {
 
 import { TestRail } from '@testrail-api/testrail-api';
 
+import { resolvePromisesInChunks } from '@reporter/utils/chunk-promise';
 import { filterDuplicatingCases, groupAttachments, groupTestResults } from '@reporter/utils/group-runs';
 import { parseArrayOfTags } from '@reporter/utils/tags';
 import { convertTestResult, extractAttachmentData } from '@reporter/utils/test-results';
@@ -27,6 +28,8 @@ class TestRailReporter implements Reporter {
     private readonly includeAttachments: boolean;
     private readonly closeRuns: boolean;
 
+    private readonly chunkSize: number;
+
     constructor(options: ReporterOptions) {
         this.isSetupCorrectly = validateSettings(options);
         logger.debug('Setting up TestRail API client');
@@ -40,6 +43,7 @@ class TestRailReporter implements Reporter {
         this.includeAllCases = options.includeAllCases ?? false;
         this.includeAttachments = options.includeAttachments ?? false;
         this.closeRuns = options.closeRuns ?? false;
+        this.chunkSize = options.apiChunkSize ?? 10;
 
         logger.debug('Reporter options', {
             includeAllCases: this.includeAllCases,
@@ -124,32 +128,34 @@ class TestRailReporter implements Reporter {
     private async createTestRuns(arrayTestRuns: ProjectSuiteCombo[]): Promise<RunCreated[]> {
         logger.debug('Runs to create', arrayTestRuns);
 
-        const results = await Promise.all(arrayTestRuns.map(async (projectSuiteCombo) => {
-            logger.info(`Creating a test run for project ${projectSuiteCombo.projectId} and suite ${projectSuiteCombo.suiteId}...`);
-            const name = `Playwright Run ${new Date().toUTCString()}`;
-            const response = await this.testRailClient.addTestRun({
-                projectId: projectSuiteCombo.projectId,
-                suiteId: projectSuiteCombo.suiteId,
-                name,
-                cases: projectSuiteCombo.arrayCaseIds,
-                includeAllCases: this.includeAllCases
-            });
+        const results = await resolvePromisesInChunks({
+            arrayInputData: arrayTestRuns,
+            chunkSize: this.chunkSize,
+            functionToCall: async (projectSuiteCombo) => {
+                logger.info(`Creating a test run for project ${projectSuiteCombo.projectId} and suite ${projectSuiteCombo.suiteId}... ⌛`);
+                const name = `Playwright Run ${new Date().toUTCString()}`;
+                const response = await this.testRailClient.addTestRun({
+                    projectId: projectSuiteCombo.projectId,
+                    suiteId: projectSuiteCombo.suiteId,
+                    name,
+                    cases: projectSuiteCombo.arrayCaseIds,
+                    includeAllCases: this.includeAllCases
+                });
 
-            if (response === null) {
-                return null;
+                if (response === null) {
+                    return null;
+                }
+
+                return {
+                    runId: response.id,
+                    ...projectSuiteCombo
+                };
             }
+        });
 
-            return {
-                runId: response.id,
-                ...projectSuiteCombo
-            };
-        }));
+        logger.debug('Runs created', results);
 
-        const arrayTestRunsCreated = results.filter((result) => result !== null);
-
-        logger.debug('Runs created', arrayTestRunsCreated);
-
-        return arrayTestRunsCreated;
+        return results;
     }
 
     private compileFinalResults(arrayTestResults: TestRailPayloadUpdateRunResult[], arrayTestRuns: RunCreated[]): FinalResult[] {
@@ -159,32 +165,33 @@ class TestRailReporter implements Reporter {
     }
 
     private async addResultsToRuns(arrayTestRuns: FinalResult[]): Promise<CaseResultMatch[]> {
-        logger.info(`Adding results to runs ${arrayTestRuns.map((run) => run.runId).join(', ')}`);
-        const results = await Promise.all(arrayTestRuns.map(async (run) => {
-            const result = await this.testRailClient.addTestRunResults(run.runId, run.arrayCaseResults);
+        logger.debug(`Adding results to runs ${arrayTestRuns.map((run) => run.runId).join(', ')}`);
 
-            if (result === null) {
-                return null;
-            }
+        const results = await resolvePromisesInChunks({
+            arrayInputData: arrayTestRuns,
+            chunkSize: this.chunkSize,
+            functionToCall: async (run) => {
+                logger.info(`Adding results to run ${run.runId}... ⌛`);
+                const result = await this.testRailClient.addTestRunResults(run.runId, run.arrayCaseResults);
 
-            if (result.length !== run.arrayCaseResults.length) {
-                logger.error(`Number of results does not match number of cases when updating test run ${run.runId}`);
+                if (result === null) {
+                    return null;
+                }
 
-                return null;
-            }
+                if (result.length !== run.arrayCaseResults.length) {
+                    logger.error(`Number of results does not match number of cases when updating test run ${run.runId}`);
+                    return null;
+                }
 
-            // Match request payload to response by index
-            const arrayMatchedCasesToResults = run.arrayCaseResults.map((caseResult, index) => {
-                return {
+                // Match request payload to response by index
+                return run.arrayCaseResults.map((caseResult, index) => ({
                     caseId: caseResult.case_id,
                     resultId: result[index].id
-                };
-            });
+                }));
+            }
+        });
 
-            return arrayMatchedCasesToResults;
-        }));
-
-        return results.flat().filter((result) => result !== null);
+        return results.flat();
     }
 
     private async addAttachments(arrayAttachments: AttachmentData[], arrayRunsUpdated: CaseResultMatch[]): Promise<void> {
@@ -196,16 +203,22 @@ class TestRailReporter implements Reporter {
             return;
         }
 
-        logger.info(`Adding attachments to results ${arrayAttachmentPayloads.map((payload) => payload.resultId).join(', ')}`);
+        logger.info(`Adding attachments to results ${arrayAttachmentPayloads.map((payload) => payload.resultId).join(', ')}... ⌛`);
 
-        await Promise.all(arrayAttachmentPayloads.map(async (payload) => {
-            await this.testRailClient.addAttachmentToResult(payload);
-        }));
+        await resolvePromisesInChunks({
+            arrayInputData: arrayAttachmentPayloads,
+            functionToCall: (payload) => this.testRailClient.addAttachmentToResult(payload),
+            chunkSize: this.chunkSize
+        });
     }
 
     private async closeTestRuns(arrayRunIds: number[]): Promise<void> {
-        logger.info(`Closing runs ${arrayRunIds.join(', ')}`);
-        await Promise.all(arrayRunIds.map((runId) => this.testRailClient.closeTestRun(runId)));
+        logger.info(`Closing runs ${arrayRunIds.join(', ')}... ⌛`);
+        await resolvePromisesInChunks({
+            arrayInputData: arrayRunIds,
+            functionToCall: (runId) => this.testRailClient.closeTestRun(runId),
+            chunkSize: this.chunkSize
+        });
     }
 
     printsToStdio(): boolean {
