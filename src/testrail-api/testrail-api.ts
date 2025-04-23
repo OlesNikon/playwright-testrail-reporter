@@ -6,7 +6,7 @@ import axiosRetry from 'axios-retry';
 import formData from 'form-data';
 
 import type { ReporterOptions } from '@types-internal/playwright-reporter.types';
-import type { TestRailBaseRun, TestRailPayloadAddAttachment, TestRailPayloadCreateRun, TestRailPayloadUpdateRunResult, TestRailResponseAttachmentAdded, TestRailResponseRunCreated, TestRailResponseRunUpdated } from '@types-internal/testrail-api.types';
+import type { TestRailBaseResult, TestRailBaseRun, TestRailBaseSuite, TestRailPayloadAddAttachment, TestRailPayloadCreateRun, TestRailPayloadUpdateRunResult, TestRailResponseAttachmentAdded, TestRailResponseRunCreated } from '@types-internal/testrail-api.types';
 
 import logger from '@logger';
 
@@ -56,6 +56,26 @@ class TestRail {
     }
 
     /**
+     * Retrieves information about a specific test suite from TestRail.
+     * @param {number} suiteId - The ID of the test suite to retrieve
+     * @returns {Promise<TestRailBaseSuite | null>} Suite information if found, null if retrieval fails
+     */
+    async getSuiteInfo(suiteId: TestRailBaseSuite['id']): Promise<TestRailBaseSuite | null> {
+        return this.client.get(`/api/v2/get_suite/${suiteId}`)
+            .then((response: { data: TestRailBaseSuite }) => {
+                logger.debug(`Suite info retrieved for suite ID: ${suiteId}`);
+
+                return response.data;
+            })
+            .catch((error: unknown) => {
+                const errorPayload = (error as AxiosError).response?.data ?? error;
+                logger.error(`Failed to retrieve suite info for suite ID ${suiteId}`, errorPayload);
+
+                return null;
+            });
+    }
+
+    /**
      * Creates a new test run in TestRail.
      * @param {Object} params - The parameters for creating a test run
      * @param {number} params.projectId - The ID of the project
@@ -96,11 +116,11 @@ class TestRail {
      * @param {number} results[].case_id - The ID of the test case
      * @param {TestRailCaseStatus} [results[].status_id] - The status ID of the test result (passed, failed, blocked, etc.)
      * @param {string} [results[].comment] - Optional comment or error message for the test result
-     * @returns {Promise<TestRailResponseRunUpdated[] | null>} Array of updated test results or null if update fails
+     * @returns {Promise<TestRailBaseResult[] | null>} Array of updated test results or null if update fails
      */
-    async addTestRunResults(runId: TestRailBaseRun['id'], results: TestRailPayloadUpdateRunResult[]): Promise<TestRailResponseRunUpdated[] | null> {
+    async addTestRunResults(runId: TestRailBaseRun['id'], results: TestRailPayloadUpdateRunResult[]): Promise<TestRailBaseResult[] | null> {
         return this.client.post(`/api/v2/add_results_for_cases/${runId}`, JSON.stringify({ results }))
-            .then((response: { data: TestRailResponseRunUpdated[] }) => {
+            .then((response: { data: TestRailBaseResult[] }) => {
                 logger.debug(`Results added to run ${runId}`);
 
                 return response.data;
