@@ -1,12 +1,19 @@
 import { stripVTControlCharacters } from 'util';
 
-import type { TestCase, TestError, TestResult } from '@playwright/test/reporter';
+import type { TestCase, TestError, TestResult, TestStep } from '@playwright/test/reporter';
 
-import { parseArrayOfTags, parseSingleTag } from '@reporter/utils/tags';
+import { parseArrayOfTags, parseSingleTag, REGEX_TAG_STEP } from '@reporter/utils/tags';
 
 import type { AttachmentData } from '@types-internal/playwright-reporter.types';
 import { TestRailCaseStatus, TestRailPayloadUpdateRunResult } from '@types-internal/testrail-api.types';
 
+import logger from '@logger';
+
+/**
+ * Formats a duration in milliseconds to a human-readable string.
+ * @param ms The duration in milliseconds
+ * @returns A formatted string in the format "Xs" for durations under 1 minute, or "Xm Ys" for durations over 1 minute
+ */
 function formatMilliseconds(ms: number): string {
     const seconds = Math.ceil(ms / 1000);
 
@@ -44,12 +51,22 @@ function convertTestStatus(status: TestResult['status']): TestRailCaseStatus {
     }
 }
 
+/**
+ * Formats a single test error into a readable string.
+ * @param error The test error object to format
+ * @returns A formatted error message string with control characters stripped
+ */
 function formatSingleError(error: TestError): string {
     const errorMessage = error.stack ?? error.message ?? 'Unknown error';
 
     return stripVTControlCharacters(errorMessage);
 }
 
+/**
+ * Formats an array of test errors into a single readable message.
+ * @param arrayErrors Array of test errors to format
+ * @returns A formatted string containing all error messages. If multiple errors exist, they are numbered and separated by newlines
+ */
 function formatErrorMessage(arrayErrors: TestResult['errors']): string {
     if (arrayErrors.length === 0) {
         return 'Unknown error';
@@ -65,6 +82,36 @@ function formatErrorMessage(arrayErrors: TestResult['errors']): string {
 }
 
 /**
+ * Formats a success message for a passed test.
+ * @param title The test title
+ * @param duration The formatted test duration
+ * @returns A formatted success message string
+ */
+function formatPassedMessage(title: string, duration: string): string {
+    return `${title} passed in ${duration}`;
+}
+
+/**
+ * Formats a failure message for a failed test.
+ * @param params Object containing test details
+ * @param params.title The test title
+ * @param params.duration The formatted test duration
+ * @param params.errors Array of test errors
+ * @returns A formatted failure message string including error details
+ */
+function formatFailedMessage({
+    title,
+    duration,
+    errors
+}: {
+    title: string,
+    duration: string,
+    errors: TestError[]
+}): string {
+    return `${title} failed in ${duration}:\n\n${formatErrorMessage(errors)}`;
+}
+
+/**
  * Generates a comment string based on the Playwright test result.
  * @param testResult The Playwright test result object.
  * @returns A descriptive comment based on the test status:
@@ -76,15 +123,19 @@ function formatErrorMessage(arrayErrors: TestResult['errors']): string {
  * - unknown: "Test finished with unknown status"
  */
 function generateTestComment(testCase: TestCase, testResult: TestResult): string {
-    const durationString = formatMilliseconds(testResult.duration);
+    const duration = formatMilliseconds(testResult.duration);
 
     switch (testResult.status) {
         case 'passed':
-            return `${testCase.title} passed in ${durationString}`;
+            return formatPassedMessage(testCase.title, duration);
         case 'failed':
-            return `${testCase.title} failed\n\n${formatErrorMessage(testResult.errors)}`;
+            return formatFailedMessage({
+                title: testCase.title,
+                duration,
+                errors: testResult.errors
+            });
         case 'timedOut':
-            return `${testCase.title} timed out in ${durationString}`;
+            return `${testCase.title} timed out in ${duration}`;
         case 'interrupted':
             return `${testCase.title} interrupted`;
         case 'skipped':
@@ -92,6 +143,50 @@ function generateTestComment(testCase: TestCase, testResult: TestResult): string
         default:
             return `${testCase.title} finished with unknown status`;
     }
+}
+
+/**
+ * Updates test results based on test steps by matching TestRail case IDs.
+ * For each non-errored test step, extracts all TestRail case IDs from its title and marks
+ * the corresponding test results as passed. A single test step can contain multiple TestRail case IDs.
+ *
+ * @param {Object} params - The parameters object
+ * @param {TestRailPayloadUpdateRunResult[]} params.arrayTestResults - Array of test results to be updated
+ * @param {TestStep[]} params.arrayTestSteps - Array of test steps to process
+ * @param {TestCase['title']} params.testName - The name of the test case
+ * @returns {TestRailPayloadUpdateRunResult[]} Updated array of test results with modified status_id values
+ */
+function alterTestResultsFromSteps({
+    arrayTestResults,
+    arrayTestSteps,
+    testName
+}: {
+    arrayTestResults: TestRailPayloadUpdateRunResult[],
+    arrayTestSteps: TestStep[],
+    testName: TestCase['title']
+}): TestRailPayloadUpdateRunResult[] {
+    const updatedResults = structuredClone(arrayTestResults);
+
+    for (const testStep of arrayTestSteps) {
+        const arrayMatchingCaseIds = testStep.title.matchAll(REGEX_TAG_STEP);
+
+        for (const regexResult of arrayMatchingCaseIds) {
+            const parsedCaseId = parseInt(regexResult[1], 10);
+
+            const matchingTestResult = updatedResults.find((testResult) => testResult.case_id === parsedCaseId);
+            const duration = formatMilliseconds(testStep.duration);
+
+            if (matchingTestResult && !testStep.error) {
+                matchingTestResult.status_id = TestRailCaseStatus.passed;
+                matchingTestResult.comment = formatPassedMessage(`${testName} (${testStep.title})`, duration);
+                matchingTestResult.elapsed = duration;
+            } else {
+                logger.error(`Test step contains invalid TestRail case ID: ${parsedCaseId}`);
+            }
+        }
+    }
+
+    return updatedResults;
 }
 
 /**
@@ -114,8 +209,10 @@ function convertTestResult({
 }): TestRailPayloadUpdateRunResult[] {
     const parsedTags = parseArrayOfTags(testCase.tags);
 
+    let arrayTestResults: TestRailPayloadUpdateRunResult[] = [];
+
     if (parsedTags) {
-        return parsedTags.map((tag) => (
+        arrayTestResults = parsedTags.map((tag) => (
             tag.arrayCaseIds.map((caseId) => ({
                 case_id: caseId,
                 status_id: convertTestStatus(testResult.status),
@@ -123,9 +220,21 @@ function convertTestResult({
                 elapsed: formatMilliseconds(testResult.duration)
             }))
         )).flat();
+
+        const arrayTaggedSteps = testResult.steps
+            .filter((step) => step.category === 'test.step' && step.title.match(REGEX_TAG_STEP));
+
+        if (arrayTaggedSteps.length > 0) {
+            logger.debug(`Tagged steps detected for ${testCase.title}`);
+            arrayTestResults = alterTestResultsFromSteps({
+                arrayTestResults,
+                arrayTestSteps: arrayTaggedSteps,
+                testName: testCase.title
+            });
+        }
     }
 
-    return [];
+    return arrayTestResults;
 }
 
 /**
