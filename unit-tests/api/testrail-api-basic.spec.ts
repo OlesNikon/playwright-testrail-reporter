@@ -1,4 +1,7 @@
-import { TestRail } from '@testrail-api/testrail-api';
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+// eslint-disable-next-line @typescript-eslint/naming-convention
+import TestRail from '@dlenroc/testrail';
 
 import logger from '@logger';
 
@@ -13,7 +16,7 @@ describe('TestRail API: Basic (Initialize client)', () => {
 
     it('Should initialize client', () => {
         const client = new TestRail({
-            domain: 'https://testrail.example.com',
+            host: 'https://testrail.example.com',
             username: 'username',
             password: 'password'
         });
@@ -23,7 +26,7 @@ describe('TestRail API: Basic (Initialize client)', () => {
     it('Should log a debug message on client initialization', () => {
         process.env.TESTRAIL_REPORTER_DEBUG_MODE = 'true';
         const client = new TestRail({
-            domain: 'https://testrail.example.com',
+            host: 'https://testrail.example.com',
             username: 'username',
             password: 'password'
         });

@@ -177,6 +177,135 @@ If you have multiple Playwright tests that match the same TestRail case, the rep
 1. If all Playwright tests finish with the same status, the TestRail case will be marked with that status, and the comment (and error in case of fail) will be generated from the first test that finished.
 2. If any Playwright tests finish with different statuses, the reporter will prioritize the following statuses in order: passed, failed, blocked, untested.
 
+
+### Enhanced Features (new)
+- 🚀 **@dlenroc/testrail Integration** - Uses the official TestRail API client for better reliability
+- 📊 **Multiple Run URLs** - Properly handles and exposes URLs for all created runs
+- 🏷️ **Flexible Tag Formats** - Support for shortened tags with default project/suite IDs
+- 🎯 **Use Existing Runs** - Report to existing TestRail runs
+
+## Configuration
+
+### Basic Configuration
+
+```typescript
+// playwright.config.ts
+import { defineConfig } from '@playwright/test';
+
+export default defineConfig({
+  reporter: [
+    ['enhanced-testrail-reporter', {
+      // Required
+      domain: 'https://yourdomain.testrail.io',
+      username: 'your-email@example.com',
+      password: 'your-password',
+    }]
+  ]
+});
+```
+
+### Full Configuration Options
+
+```typescript
+export default defineConfig({
+  reporter: [
+    ['enhanced-testrail-reporter', {
+      // Required
+      domain: 'https://yourdomain.testrail.io',
+      username: 'your-email@example.com',
+      password: 'your-password',
+      
+      // Project and Suite Defaults (Enhanced)
+      defaultProjectId: 1,              // Default project for shortened tags
+      defaultSuiteId: 2,                // Default suite for shortened tags
+      
+      // Run Management (Enhanced)
+      useExistingRun: 123,              // Report to existing run ID
+      
+      // Original Options
+      runNameTemplate: 'Playwright Run {date}', // Template for run names
+      includeAllCases: false,           // Include all cases in run
+      includeAttachments: true,         // Attach screenshots/videos
+      closeRuns: false,                 // Close runs after completion
+      apiChunkSize: 10,                 // API batch size
+    }]
+  ]
+});
+```
+
+## Usage
+
+### Basic Test Tagging
+
+```typescript
+import { test } from '@playwright/test';
+
+// Single test case
+test('should login successfully', { tag: '@123-456-789' }, async ({ page }) => {
+  // Test implementation
+});
+
+// Multiple test cases
+test('should handle multiple scenarios', { 
+  tag: ['@123-456-789', '@123-456-790'] 
+}, async ({ page }) => {
+  // Test implementation
+});
+```
+
+### Tagged Test Steps
+
+```typescript
+test('multi-step process', { tag: ['@C101', '@C102', '@C103', '@C104'] }, async ({ page }) => {
+  await test.step('Login @101', async () => {
+    // This step result will be reported to case 101
+  });
+  
+  await test.step('Navigate @102', async () => {
+    // This step result will be reported to case 102
+  });
+  
+  await test.step('Submit form @103 @104', async () => {
+    // This step result will be reported to cases 103 and 104
+  });
+});
+```
+
+## Tag Formats
+
+The enhanced reporter supports three tag formats:
+
+### 1. Full Format (Original)
+```typescript
+test('test name', { tag: '@123-456-789' }, async ({ page }) => {
+  // Project: 123, Suite: 456, Case: 789
+});
+```
+
+### 2. Suite-Case Format (Enhanced)
+Requires `defaultProjectId` to be set:
+```typescript
+test('test name', { tag: '@S456-789' }, async ({ page }) => {
+  // Project: defaultProjectId, Suite: 456, Case: 789
+});
+```
+
+### 3. Case-Only Format (Enhanced)
+Requires both `defaultProjectId` and `defaultSuiteId` to be set:
+```typescript
+test('test name', { tag: '@C789' }, async ({ page }) => {
+  // Project: defaultProjectId, Suite: defaultSuiteId, Case: 789
+});
+```
+
+### Tag Variations
+All formats support the TestRail 'R' prefix:
+```typescript
+{ tag: '@123-456-R789' }  // Full format with R
+{ tag: '@S456-R789' }     // Suite format with R
+{ tag: '@C789' }          // Case format (R not needed)
+```
+
 #### Known Issues
 
 When several Playwright tests match the same TestRail case, each test will upload its attachments to the TestRail case. This may result in duplicate attachments.

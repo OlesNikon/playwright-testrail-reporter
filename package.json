@@ -27,6 +27,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@dlenroc/testrail": "^1.9.1",
     "axios": "^1.8.4",
     "axios-retry": "^4.5.0",
     "chalk": "^4.1.2",

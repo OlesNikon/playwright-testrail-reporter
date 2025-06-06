@@ -39,8 +39,9 @@ function groupTestResults(arrayTestResults: TestRailPayloadUpdateRunResult[], ar
  */
 function compareByStatusPriority(a: TestRailPayloadUpdateRunResult, b: TestRailPayloadUpdateRunResult): number {
     const priorityOrder: Record<TestRailCaseStatus, number> = {
-        [TestRailCaseStatus.passed]: 4,
-        [TestRailCaseStatus.failed]: 3,
+        [TestRailCaseStatus.passed]: 5,
+        [TestRailCaseStatus.failed]: 4,
+        [TestRailCaseStatus.skipped]: 3,
         [TestRailCaseStatus.blocked]: 2,
         [TestRailCaseStatus.untested]: 1
     };
@@ -90,8 +91,7 @@ function groupAttachments(arrayAttachments: AttachmentData[], arrayCaseResults: 
 
     arrayAttachments.forEach((attachment) => {
         const matchingResult = arrayCaseResults.find((mapping) =>
-            mapping.caseId === attachment.caseId
-        );
+            mapping.caseId === attachment.caseId);
 
         if (matchingResult) {
             mappedAttachments.push(...attachment.arrayFiles.map((file) => ({

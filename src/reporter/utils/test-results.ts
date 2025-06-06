@@ -33,7 +33,7 @@ function formatMilliseconds(ms: number): string {
  * @returns The corresponding TestRail status:
  * - passed -> TestRailCaseStatus.passed
  * - failed/timedOut/interrupted -> TestRailCaseStatus.failed
- * - skipped -> TestRailCaseStatus.blocked
+ * - skipped -> TestRailCaseStatus.skipped
  * - others -> TestRailCaseStatus.untested
  */
 function convertTestStatus(status: TestResult['status']): TestRailCaseStatus {
@@ -45,7 +45,7 @@ function convertTestStatus(status: TestResult['status']): TestRailCaseStatus {
         case 'interrupted':
             return TestRailCaseStatus.failed;
         case 'skipped':
-            return TestRailCaseStatus.blocked;
+            return TestRailCaseStatus.skipped;
         default:
             return TestRailCaseStatus.untested;
     }
@@ -58,7 +58,6 @@ function convertTestStatus(status: TestResult['status']): TestRailCaseStatus {
  */
 function formatSingleError(error: TestError): string {
     const errorMessage = error.stack ?? error.message ?? 'Unknown error';
-
     return stripVTControlCharacters(errorMessage);
 }
 
@@ -113,14 +112,9 @@ function formatFailedMessage({
 
 /**
  * Generates a comment string based on the Playwright test result.
- * @param testResult The Playwright test result object.
- * @returns A descriptive comment based on the test status:
- * - passed: "Test passed in {duration} seconds"
- * - failed: "Test failed: {error message}"
- * - timedOut: "Test timed out in {duration} seconds"
- * - interrupted: "Test interrupted"
- * - skipped: "Test skipped"
- * - unknown: "Test finished with unknown status"
+ * @param testCase The Playwright test case
+ * @param testResult The Playwright test result object
+ * @returns A descriptive comment based on the test status
  */
 function generateTestComment(testCase: TestCase, testResult: TestResult): string {
     const duration = formatMilliseconds(testResult.duration);
@@ -194,6 +188,8 @@ function alterTestResultsFromSteps({
  * @param params Object containing test case and result information
  * @param params.testCase Playwright test case containing tags with TestRail case IDs
  * @param params.testResult Playwright test result with status and other details
+ * @param params.defaultProjectId Default project ID to use when not specified in tag
+ * @param params.defaultSuiteId Default suite ID to use when not specified in tag
  * @returns Array of TestRail case results. Each result includes:
  * - case_id: TestRail case ID extracted from tags
  * - status_id: Converted TestRail status based on test result
@@ -202,12 +198,16 @@ function alterTestResultsFromSteps({
  */
 function convertTestResult({
     testCase,
-    testResult
+    testResult,
+    defaultProjectId,
+    defaultSuiteId
 }: {
     testCase: TestCase,
-    testResult: TestResult
+    testResult: TestResult,
+    defaultProjectId?: number,
+    defaultSuiteId?: number
 }): TestRailPayloadUpdateRunResult[] {
-    const parsedTags = parseArrayOfTags(testCase.tags);
+    const parsedTags = parseArrayOfTags(testCase.tags, defaultProjectId, defaultSuiteId);
 
     let arrayTestResults: TestRailPayloadUpdateRunResult[] = [];
 
@@ -242,22 +242,28 @@ function convertTestResult({
  * @param {Object} params - The parameters object
  * @param {TestCase} params.testCase - The test case containing tags with TestRail case IDs
  * @param {TestResult} params.testResult - The test result containing attachments
+ * @param {number} params.defaultProjectId - Default project ID to use when not specified in tag
+ * @param {number} params.defaultSuiteId - Default suite ID to use when not specified in tag
  * @returns {AttachmentData[]} Array of attachment data objects, each containing a TestRail case ID and array of file paths.
  * Returns empty array if no attachments present or no valid TestRail case IDs found in tags.
  */
 function extractAttachmentData({
     testCase,
-    testResult
+    testResult,
+    defaultProjectId,
+    defaultSuiteId
 }: {
     testCase: TestCase,
-    testResult: TestResult
+    testResult: TestResult,
+    defaultProjectId?: number,
+    defaultSuiteId?: number
 }): AttachmentData[] {
     if (testResult.attachments.length === 0) {
         return [];
     }
 
     const arrayParsedValidTags = testCase.tags
-        .map((tag) => parseSingleTag(tag))
+        .map((tag) => parseSingleTag(tag, defaultProjectId, defaultSuiteId))
         .filter((parsedTag) => parsedTag !== null);
 
     if (arrayParsedValidTags.length === 0) {

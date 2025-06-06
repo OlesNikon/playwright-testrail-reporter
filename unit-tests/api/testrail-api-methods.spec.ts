@@ -1,6 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+// eslint-disable-next-line @typescript-eslint/naming-convention
+import TestRail from '@dlenroc/testrail';
 import axiosMockAdapter from 'axios-mock-adapter';
-
-import { TestRail } from '@testrail-api/testrail-api';
 
 import logger from '@logger';
 
@@ -17,7 +21,7 @@ describe('TestRail API: Main methods tests', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         client = new TestRail({
-            domain: 'https://fake.testrail.io',
+            host: 'https://fake.testrail.io',
             username: 'username',
             password: 'password'
         });
@@ -34,7 +38,7 @@ describe('TestRail API: Main methods tests', () => {
         it('Should return suite info and log debug on successful response', async () => {
             mock.onGet('/api/v2/get_suite/1').reply(200, { id: 123, name: 'Test Suite' });
 
-            const result = await client.getSuiteInfo(1);
+            const result = await client.getSuite(1);
 
             expect(logger.warn).not.toHaveBeenCalled();
             expect(logger.debug).toHaveBeenCalledWith('Suite info retrieved for suite ID: 1');
@@ -44,7 +48,7 @@ describe('TestRail API: Main methods tests', () => {
         it('Should return null and log error on error', async () => {
             mock.onGet('/api/v2/get_suite/1').reply(403);
 
-            const result = await client.getSuiteInfo(1);
+            const result = await client.getSuite(1);
 
             expect(logger.warn).not.toHaveBeenCalled();
             const error = new Error('Request failed with status code 403');
@@ -57,7 +61,7 @@ describe('TestRail API: Main methods tests', () => {
         it('Should return data and log debug on successful response', async () => {
             mock.onPost('/api/v2/add_run/1').reply(200, { id: 123, name: 'Test Run' });
 
-            const result = await client.addTestRun({
+            const result = await client.addRun({
                 projectId: 1,
                 suiteId: 1,
                 name: 'Test Run',
@@ -73,7 +77,7 @@ describe('TestRail API: Main methods tests', () => {
         it('Should return null and log error on error', async () => {
             mock.onPost('/api/v2/add_run/1').reply(403);
 
-            const result = await client.addTestRun({
+            const result = await client.addRun({
                 projectId: 1,
                 suiteId: 1,
                 name: 'Test Run',
@@ -92,7 +96,7 @@ describe('TestRail API: Main methods tests', () => {
         it('Should return data and log debug on successful response', async () => {
             mock.onPost('/api/v2/add_results_for_cases/1').reply(200, [{ id: 123, name: 'Test Run Result' }]);
 
-            const result = await client.addTestRunResults(1, [{ case_id: 1, status_id: 1, comment: 'Test comment' }]);
+            const result = await client.addRun(1, [{ case_id: 1, status_id: 1, comment: 'Test comment' }]);
 
             expect(logger.warn).not.toHaveBeenCalled();
             expect(logger.debug).toHaveBeenCalledWith('Results added to run 1');
@@ -102,7 +106,7 @@ describe('TestRail API: Main methods tests', () => {
         it('Should return null and log error on error', async () => {
             mock.onPost('/api/v2/add_results_for_cases/1').reply(403);
 
-            const result = await client.addTestRunResults(1, [{ case_id: 1, status_id: 1, comment: 'Test comment' }]);
+            const result = await client.addResultsForCases(1, [{ case_id: 1, status_id: 1, comment: 'Test comment' }]);
 
             expect(logger.warn).not.toHaveBeenCalled();
             const error = new Error('Request failed with status code 403');
@@ -114,7 +118,7 @@ describe('TestRail API: Main methods tests', () => {
     describe('closeTestRun', () => {
         it('Should log debug on successful response', async () => {
             mock.onPost('/api/v2/close_run/1').reply(200);
-            await client.closeTestRun(1);
+            await client.closeRun(1);
 
             expect(logger.warn).not.toHaveBeenCalled();
             expect(logger.debug).toHaveBeenCalledWith('Run 1 closed');
@@ -122,7 +126,7 @@ describe('TestRail API: Main methods tests', () => {
 
         it('Should log error on error', async () => {
             mock.onPost('/api/v2/close_run/1').reply(403);
-            await client.closeTestRun(1);
+            await client.closeRun(1);
 
             expect(logger.warn).not.toHaveBeenCalled();
             const error = new Error('Request failed with status code 403');

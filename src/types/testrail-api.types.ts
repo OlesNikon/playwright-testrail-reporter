@@ -1,8 +1,4 @@
 /* eslint-disable @typescript-eslint/naming-convention */
-
-/*
-    Base types that are used both in requests and responses
-*/
 export type TestRailBaseProject = {
     id: number,
     is_completed: boolean,
@@ -67,43 +63,6 @@ export type TestRailBaseAttachment = {
     id: number
 };
 
-/*
-    Response types
-*/
-export type TestRailResponseRunCreated = TestRailBaseRun & {
-    milestone_id: number | null,
-    assignedto_id: TestRailBaseUser['id'] | null,
-    is_completed: boolean,
-    completed_on: number | null,
-    config: null,
-    config_ids: number[],
-    passed_count: number,
-    blocked_count: number,
-    untested_count: number,
-    retest_count: number,
-    failed_count: number,
-    project_id: TestRailBaseProject['id'],
-    plan_id: number | null,
-    updated_on: number,
-    refs: string | null
-};
-
-export type TestRailResponseAttachmentAdded = {
-    attachment_id: TestRailBaseAttachment['id']
-};
-
-/*
-    Request payload types
-*/
-export type TestRailPayloadCreateRun = {
-    projectId: TestRailBaseProject['id'],
-    suiteId: TestRailBaseSuite['id'],
-    name: string,
-    description?: string,
-    cases: TestRailBaseCase['id'][],
-    includeAllCases?: boolean
-};
-
 export type TestRailPayloadUpdateRunResult = Pick<TestRailBaseResult, 'status_id' | 'comment'> & {
     case_id: TestRailBaseCase['id'],
     assignedto_id?: TestRailBaseUser['id'],
@@ -124,5 +83,7 @@ export enum TestRailCaseStatus {
     untested = 3,
     // retest status exists in API but is not used in reporter
     // retest = 4,
-    failed = 5
+    failed = 5,
+    // custom status
+    skipped = 6
 }

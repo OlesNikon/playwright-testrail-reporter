@@ -8,7 +8,10 @@ export type ReporterOptions = {
     includeAttachments?: boolean,
     closeRuns?: boolean,
     apiChunkSize?: number,
-    runNameTemplate?: string
+    runNameTemplate?: string,
+    defaultProjectId?: number,
+    defaultSuiteId?: number,
+    useExistingRun?: number
 };
 
 export type ParsedTag = {

@@ -1,6 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+// eslint-disable-next-line @typescript-eslint/naming-convention
+import TestRail from '@dlenroc/testrail';
 import axiosMockAdapter from 'axios-mock-adapter';
-
-import { TestRail } from '@testrail-api/testrail-api';
 
 import logger from '@logger';
 

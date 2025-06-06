@@ -2,6 +2,7 @@ import type { ReporterOptions } from '@types-internal/playwright-reporter.types'
 
 import logger from '@logger';
 
+// eslint-disable-next-line complexity
 export function validateSettings(options: ReporterOptions): boolean {
     const missingFields: string[] = [];
 
@@ -44,6 +45,21 @@ export function validateSettings(options: ReporterOptions): boolean {
 
     if ('runNameTemplate' in options && typeof options.runNameTemplate !== 'string') {
         logger.error('runNameTemplate must be a string');
+        return false;
+    }
+
+    if ('defaultProjectId' in options && (!Number.isInteger(options.defaultProjectId) || options.defaultProjectId! < 1)) {
+        logger.error('defaultProjectId must be a positive integer');
+        return false;
+    }
+
+    if ('defaultSuiteId' in options && (!Number.isInteger(options.defaultSuiteId) || options.defaultSuiteId! < 1)) {
+        logger.error('defaultSuiteId must be a positive integer');
+        return false;
+    }
+
+    if ('useExistingRun' in options && (!Number.isInteger(options.useExistingRun) || options.useExistingRun! < 1)) {
+        logger.error('useExistingRun must be a positive integer');
         return false;
     }
 
